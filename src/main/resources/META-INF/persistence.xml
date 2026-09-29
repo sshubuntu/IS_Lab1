@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.1">
+  <persistence-unit name="labwork" transaction-type="JTA">
+    <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+
+    <jta-data-source>jdbc/labwork</jta-data-source>
+
+    <class>ru.itmo.labwork.domain.LabWork</class>
+    <class>ru.itmo.labwork.domain.Coordinates</class>
+    <class>ru.itmo.labwork.domain.Discipline</class>
+    <class>ru.itmo.labwork.domain.Person</class>
+    <class>ru.itmo.labwork.domain.Location</class>
+
+    <exclude-unlisted-classes>true</exclude-unlisted-classes>
+
+    <properties>
+      <property name="hibernate.hbm2ddl.auto" value="none"/>
+      <property name="hibernate.bytecode.provider" value="none"/>
+      <property name="hibernate.transaction.jta.platform"
+                value="org.hibernate.engine.transaction.jta.platform.internal.SunOneJtaPlatform"/>
+    </properties>
+  </persistence-unit>
+</persistence>

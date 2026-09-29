@@ -1,0 +1,13 @@
+target/
+.tools/
+.env
+*.log
+report/*.aux
+report/*.out
+report/*.toc
+task.txt
+docs
+report/report.tex
+report/verification.tex
+.vscode
+.env.example

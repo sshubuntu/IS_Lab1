@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.1">
+  <persistence-unit name="labwork" transaction-type="RESOURCE_LOCAL">
+    <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+
+    <class>ru.itmo.labwork.domain.LabWork</class>
+    <class>ru.itmo.labwork.domain.Coordinates</class>
+    <class>ru.itmo.labwork.domain.Discipline</class>
+    <class>ru.itmo.labwork.domain.Person</class>
+    <class>ru.itmo.labwork.domain.Location</class>
+
+    <exclude-unlisted-classes>true</exclude-unlisted-classes>
+
+    <properties>
+      <property name="hibernate.hbm2ddl.auto" value="none"/>
+    </properties>
+  </persistence-unit>
+</persistence>

@@ -1,0 +1,155 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:f="jakarta.faces.core"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:p="http://primefaces.org/ui"
+                template="/WEB-INF/template.xhtml">
+
+  <ui:define name="content">
+    <h1>Объекты</h1>
+    <p>Выберите раздел. Нажмите стрелку, чтобы развернуть все поля записи.</p>
+
+    <h:form id="toolbar">
+      <p:messages id="messages" showDetail="false"/>
+
+      <div class="toolbar">
+        <p:selectOneMenu value="#{workspace.kind}" styleClass="kind-menu">
+          <f:selectItems value="#{workspace.kinds}"/>
+          <p:ajax listener="#{workspace.changeKind}" update=":toolbar :list :editForm :deleteForm"/>
+        </p:selectOneMenu>
+
+        <p:commandButton icon="pi pi-plus" title="Создать" ariaLabel="Создать"
+                         action="#{workspace.create}" update=":editForm"
+                         oncomplete="PF('editor').show()"/>
+
+        <span class="spacer"/>
+        <p:commandButton value="Команды" icon="pi pi-bolt" title="Команды"
+                         action="/operations?faces-redirect=true" styleClass="ui-button-secondary"/>
+      </div>
+
+      <p:fieldset legend="Фильтры и сортировка" toggleable="true" collapsed="true">
+        <div class="filters">
+          <ui:repeat value="#{workspace.stringColumns}" var="column">
+            <div class="filter">
+              <label><h:outputText value="#{workspace.columnLabel(column)}"/></label>
+              <p:inputText value="#{workspace.filters[column]}" placeholder="Содержит…"/>
+            </div>
+          </ui:repeat>
+        </div>
+
+        <div class="toolbar filters-tools">
+          <p:selectOneMenu value="#{workspace.sort}">
+            <f:selectItems value="#{workspace.columns}" var="c" itemValue="#{c}"
+                           itemLabel="#{workspace.columnLabel(c)}"/>
+          </p:selectOneMenu>
+          <p:selectBooleanCheckbox value="#{workspace.descending}" itemLabel="По убыванию"/>
+          <p:commandButton value="Применить" icon="pi pi-filter" action="#{workspace.search}"
+                           update=":list messages"/>
+        </div>
+      </p:fieldset>
+    </h:form>
+
+    <h:form id="list">
+      <div class="table-scroll card">
+        <p:dataTable id="table" value="#{workspace.rows}" var="row" rowKey="#{row['id']}"
+                     emptyMessage="Объекты не найдены" stripedRows="true">
+          <p:column style="width:40px">
+            <p:rowToggler expanderIcon="pi pi-fw pi-chevron-right"
+                          collapserIcon="pi pi-fw pi-chevron-down" title="Развернуть"/>
+          </p:column>
+          <p:column headerText="Действия" style="width:100px">
+            <p:commandButton icon="pi pi-pencil" title="Изменить" ariaLabel="Изменить"
+                             action="#{workspace.editRow(row['id'])}" process="@this"
+                             update=":editForm :toolbar:messages" oncomplete="PF('editor').show()">
+              <p:resetInput target=":editForm"/>
+            </p:commandButton>
+            <p:commandButton icon="pi pi-trash" title="Удалить" ariaLabel="Удалить"
+                             action="#{workspace.prepareDeleteRow(row['id'])}" process="@this"
+                             update=":deleteForm :toolbar:messages" oncomplete="PF('removal').show()"/>
+          </p:column>
+          <p:columns value="#{workspace.topColumns}" var="column"
+                     headerText="#{workspace.columnLabel(column)}">
+            <h:outputText value="#{row[column]}"/>
+          </p:columns>
+
+          <p:rowExpansion>
+            <div class="expand-details">
+              <ui:repeat value="#{workspace.subgroups}" var="group">
+                <div class="expand-group">
+                  <div class="expand-title">
+                    <h:outputText value="#{workspace.columnLabel(group)}"/>
+                    <span class="count">#{workspace.subcolumnCount(group)}</span>
+                  </div>
+                  <div class="detail-grid">
+                    <ui:repeat value="#{workspace.subcolumns[group]}" var="sub">
+                      <strong><h:outputText value="#{workspace.columnLabel(sub)}"/></strong>
+                      <span><h:outputText value="#{row[sub]}"/></span>
+                    </ui:repeat>
+                  </div>
+                </div>
+              </ui:repeat>
+            </div>
+          </p:rowExpansion>
+        </p:dataTable>
+      </div>
+
+      <p:outputPanel id="pager" styleClass="toolbar">
+        <p:commandButton icon="pi pi-chevron-left" title="Назад" ariaLabel="Назад"
+                         value="Назад" action="#{workspace.previous}" disabled="#{workspace.first}"
+                         process="@this" update="table pager"/>
+        <h:outputText value="Страница #{workspace.pageNumber} • Всего: #{workspace.total}"/>
+        <p:commandButton value="Далее" icon="pi pi-chevron-right" iconPos="right"
+                         title="Далее" ariaLabel="Далее" action="#{workspace.next}"
+                         disabled="#{workspace.last}" process="@this" update="table pager"/>
+      </p:outputPanel>
+    </h:form>
+
+    <p:dialog header="Создание / изменение" widgetVar="editor" width="760" modal="true" responsive="true">
+      <h:form id="editForm">
+        <p:messages/>
+        <p>Для связанных полей выберите существующую запись. Создать её можно в соответствующем разделе меню.</p>
+
+        <div class="edit-fields">
+          <ui:repeat value="#{workspace.inputs}" var="field">
+            <div>
+              <h:outputText value="#{workspace.columnLabel(field.name)}"/>
+              <p:selectOneMenu value="#{workspace.values[field.name]}" rendered="#{field.choice}">
+                <f:selectItems value="#{field.options}"/>
+              </p:selectOneMenu>
+              <p:calendar value="#{workspace.dateValues[field.name]}" rendered="#{field.date}"
+                          converter="localDateTime" pattern="dd.MM.yyyy HH:mm"
+                          showButtonPanel="true" navigator="true"/>
+              <p:inputText value="#{workspace.values[field.name]}"
+                           rendered="#{not field.choice and not field.date}"/>
+              <small><h:outputText value="#{field.hint}"/></small>
+            </div>
+          </ui:repeat>
+        </div>
+
+        <p:commandButton value="Сохранить" action="#{workspace.save}" update="@form :list"
+                         oncomplete="if (!args.validationFailed &amp;&amp; document.querySelector('#editForm .ui-messages-error') === null) PF('editor').hide()"/>
+        <p:commandButton value="Отмена" type="button" onclick="PF('editor').hide()"
+                         styleClass="ui-button-secondary"/>
+      </h:form>
+    </p:dialog>
+
+    <p:dialog header="Удаление объекта" widgetVar="removal" width="600" modal="true" responsive="true">
+      <h:form id="deleteForm">
+        <p:messages/>
+        <p>Будет удалён объект #<h:outputText value="#{workspace.selectedId}"/>. Если на него ссылаются
+          другие записи, выберите замену: все ссылки будут перенесены.</p>
+
+        <p:selectOneMenu value="#{workspace.replacement}">
+          <f:selectItem itemLabel="Без замены (если нет ссылок)" itemValue="#{null}" noSelectionOption="true"/>
+          <f:selectItems value="#{workspace.replacements}" var="replacement"
+                         itemLabel="#{replacement}" itemValue="#{replacement.id}"/>
+        </p:selectOneMenu>
+
+        <p:commandButton value="Удалить" action="#{workspace.delete}" update="@form :list"
+                         oncomplete="if (document.querySelector('#deleteForm .ui-messages-error') === null) PF('removal').hide()"
+                         styleClass="ui-button-danger"/>
+      </h:form>
+    </p:dialog>
+  </ui:define>
+
+</ui:composition>

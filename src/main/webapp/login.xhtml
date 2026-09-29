@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html"
+      xmlns:f="jakarta.faces.core"
+      xmlns:ui="jakarta.faces.facelets"
+      xmlns:p="http://primefaces.org/ui">
+  <h:head>
+    <title>Вход • LabWork</title>
+    <h:outputStylesheet name="app.css"/>
+  </h:head>
+  <h:body>
+    <main class="login">
+      <div class="card login-card">
+        <h1 class="login-title">Login</h1>
+        <p>Войдите для продолжения работы.</p>
+
+      <h:form>
+        <p:messages/>
+
+        <p:outputLabel for="user" value="Логин"/>
+        <p:inputText id="user" value="#{login.username}" required="true" requiredMessage="Введите логин"/>
+
+        <p:outputLabel for="password" value="Пароль"/>
+        <p:password id="password" value="#{login.password}" required="true" requiredMessage="Введите пароль"/>
+
+<p:commandButton value="Войти" action="#{login.submit}" ajax="false" styleClass="wide"/>
+        <p class="hint">Нет аккаунта? <h:link outcome="/register" value="Зарегистрироваться"/></p>
+      </h:form>
+      </div>
+    </main>
+  </h:body>
+</html>

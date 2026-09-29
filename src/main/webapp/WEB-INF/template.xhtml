@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html"
+      xmlns:f="jakarta.faces.core"
+      xmlns:ui="jakarta.faces.facelets"
+      xmlns:p="http://primefaces.org/ui">
+  <h:head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>LabWork • Информационная система</title>
+    <h:outputStylesheet name="app.css"/>
+  </h:head>
+  <h:body>
+    <header>
+      <div class="brand">
+        <span class="logo">LW</span>
+        <span class="brand-text">
+          <strong>LabWork</strong>
+          <small>Управление лабораторными работами</small>
+        </span>
+      </div>
+      <h:form class="nav">
+        <h:link outcome="/index" value="Объекты"/>
+        <h:link outcome="/operations" value="Команды"/>
+        <h:commandLink value="Выйти" action="#{login.logout}" title="Завершить сеанс"/>
+      </h:form>
+    </header>
+
+    <main>
+      <ui:insert name="content"/>
+    </main>
+
+    <footer>LabWork · Информационная система</footer>
+  </h:body>
+</html>

@@ -1,0 +1,95 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:f="jakarta.faces.core"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:p="http://primefaces.org/ui"
+                template="/WEB-INF/template.xhtml">
+
+  <ui:define name="content">
+    <h1>Команды</h1>
+    <p>Выберите команду, укажите параметры и выполните. Каждая команда работает серверной функцией
+      PostgreSQL в одной транзакции.</p>
+
+    <h:form id="operations">
+      <p:messages/>
+
+      <div class="operation card">
+        <label class="op-title">Команда</label>
+        <p:selectOneMenu value="#{workspace.operation}">
+          <f:selectItem itemLabel="Найти по началу имени" itemValue="prefix"/>
+          <f:selectItem itemLabel="Удалить все работы автора" itemValue="author"/>
+          <f:selectItem itemLabel="Удалить одну работу по минимальному баллу" itemValue="point"/>
+          <f:selectItem itemLabel="Понизить сложность" itemValue="lower"/>
+          <f:selectItem itemLabel="Добавить 10 самых сложных в программу дисциплины" itemValue="top"/>
+          <p:ajax update="fields"/>
+        </p:selectOneMenu>
+
+        <p:outputPanel id="fields">
+          <div class="op-fields">
+            <ui:fragment rendered="#{workspace.operation eq 'prefix'}">
+              <div class="op-field">
+                <label>Префикс имени</label>
+                <p:inputText value="#{workspace.param1}" placeholder="Например: алгоритмизация"/>
+              </div>
+            </ui:fragment>
+
+            <ui:fragment rendered="#{workspace.operation eq 'author'}">
+              <div class="op-field">
+                <label>ID автора</label>
+                <p:inputText value="#{workspace.param1}" placeholder="Пусто — работы без автора"/>
+              </div>
+            </ui:fragment>
+
+            <ui:fragment rendered="#{workspace.operation eq 'point'}">
+              <div class="op-field">
+                <label>Минимальный балл</label>
+                <p:inputText value="#{workspace.param1}" placeholder="Например: 40"/>
+              </div>
+            </ui:fragment>
+
+            <ui:fragment rendered="#{workspace.operation eq 'lower'}">
+              <div class="op-field">
+                <label>ID работы</label>
+                <p:inputText value="#{workspace.param1}" placeholder="Например: 7"/>
+                <label>Число шагов (0+)</label>
+                <p:inputText value="#{workspace.param2}" placeholder="0 — понизить до EASY"/>
+              </div>
+            </ui:fragment>
+
+            <ui:fragment rendered="#{workspace.operation eq 'top'}">
+              <div class="op-field">
+                <label>ID дисциплины</label>
+                <p:inputText value="#{workspace.param1}" placeholder="Например: 2"/>
+              </div>
+            </ui:fragment>
+          </div>
+        </p:outputPanel>
+
+        <p:commandButton value="Выполнить" icon="pi pi-play" ariaLabel="Выполнить"
+                         action="#{workspace.runSpecial}" update="@form">
+          <p:confirm header="Подтверждение"
+                     message="Выполнить выбранную операцию? Удаление необратимо."
+                     icon="pi pi-question-circle"/>
+        </p:commandButton>
+      </div>
+
+      <h3><h:outputText value="#{workspace.result}"/></h3>
+
+      <div class="table-scroll card">
+        <p:dataTable value="#{workspace.results}" var="row"
+                     paginator="true" rows="20" emptyMessage="Нет результатов поиска">
+          <p:columns value="#{workspace.resultColumns}" var="column"
+                     headerText="#{workspace.columnLabel(column)}">
+            <h:outputText value="#{row[column]}"/>
+          </p:columns>
+        </p:dataTable>
+      </div>
+
+      <p:confirmDialog global="true">
+        <p:commandButton value="Да" type="button" styleClass="ui-confirmdialog-yes"/>
+        <p:commandButton value="Отмена" type="button" styleClass="ui-confirmdialog-no"/>
+      </p:confirmDialog>
+    </h:form>
+  </ui:define>
+
+</ui:composition>
