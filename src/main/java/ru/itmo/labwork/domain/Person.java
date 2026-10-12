@@ -6,7 +6,8 @@ import jakarta.validation.constraints.*;
 @Entity
 @Table(name = "person")
 public class Person extends RecordEntity {
-  @NotBlank
+  @NotBlank(message = "Имя не может быть пустым")
+  @Size(max = 1000000, message = "Имя не должно превышать {max} символов")
   @Column(name = "name", nullable = false, length = 1000000)
   private String name;
 
@@ -42,7 +43,7 @@ public class Person extends RecordEntity {
     hairColor = value;
   }
 
-  @NotNull
+  @NotNull(message = "Локация обязательна для заполнения")
   @ManyToOne(fetch = FetchType.EAGER)
   @JoinColumn(name = "location_id", nullable = false)
   private Location location;
@@ -66,7 +67,7 @@ public class Person extends RecordEntity {
     birthday = value;
   }
 
-  @NotNull
+  @NotNull(message = "Национальность обязательна для заполнения")
   @Enumerated(EnumType.STRING)
   @Column(name = "nationality", nullable = false)
   private Country nationality;

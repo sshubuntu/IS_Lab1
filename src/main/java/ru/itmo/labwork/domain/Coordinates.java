@@ -6,7 +6,7 @@ import jakarta.validation.constraints.*;
 @Entity
 @Table(name = "coordinates")
 public class Coordinates extends RecordEntity {
-  @AssertTrue(message = "y должно быть конечным числом")
+  @AssertTrue(message = "Значение y должно быть конечным числом (не NaN, не Infinity)")
   public boolean isFinite() {
     return y == null || Float.isFinite(y);
   }
@@ -22,7 +22,7 @@ public class Coordinates extends RecordEntity {
     x = value;
   }
 
-  @NotNull
+  @NotNull(message = "Поле y обязательно для заполнения")
   @Column(name = "y", nullable = false)
   private Float y;
 

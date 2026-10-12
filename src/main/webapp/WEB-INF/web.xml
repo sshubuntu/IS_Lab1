@@ -8,6 +8,11 @@
     <param-value>Production</param-value>
   </context-param>
 
+  <context-param>
+    <param-name>jakarta.faces.ENABLE_WEBSOCKET_ENDPOINT</param-name>
+    <param-value>true</param-value>
+  </context-param>
+
   <servlet>
     <servlet-name>Faces Servlet</servlet-name>
     <servlet-class>jakarta.faces.webapp.FacesServlet</servlet-class>

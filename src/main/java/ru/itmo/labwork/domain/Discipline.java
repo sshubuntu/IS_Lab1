@@ -6,7 +6,8 @@ import jakarta.validation.constraints.*;
 @Entity
 @Table(name = "discipline")
 public class Discipline extends RecordEntity {
-  @NotBlank
+  @NotBlank(message = "Название дисциплины не может быть пустым")
+  @Size(max = 1000000, message = "Название не должно превышать {max} символов")
   @Column(name = "name", nullable = false, length = 1000000)
   private String name;
 

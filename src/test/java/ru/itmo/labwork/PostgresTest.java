@@ -41,10 +41,7 @@ class PostgresTest {
                 "jakarta.persistence.jdbc.driver", "org.postgresql.Driver"));
     em = factory.createEntityManager();
     String actual =
-        (String)
-            tx(
-                em,
-                () -> em.createNativeQuery("select current_database()").getSingleResult());
+        (String) tx(em, () -> em.createNativeQuery("select current_database()").getSingleResult());
     if (!actual.equals(Database.env("DB_NAME", "")) || !actual.endsWith("_test"))
       throw new IllegalStateException("DB_URL must target the named test database");
     service = new LabService();
@@ -74,9 +71,10 @@ class PostgresTest {
         em,
         () -> {
           em.createNativeQuery(
-                  "truncate lab_work,discipline_program,person,discipline,location,coordinates"
+                  "truncate lab_work,person,discipline,location,coordinates"
                       + " restart identity cascade")
               .executeUpdate();
+          em.clear();
           return null;
         });
   }
@@ -93,7 +91,9 @@ class PostgresTest {
     }
   }
 
-  /** @Transactional is a container interceptor; in standalone tests wrap each call manually. */
+  /**
+   * @Transactional is a container interceptor; in standalone tests wrap each call manually.
+   */
   static class TxLabService extends LabService {
     <T> T run(Callable<T> work) {
       return (T)
@@ -109,7 +109,8 @@ class PostgresTest {
     }
 
     @Override
-    public Page page(String kind, Map<String, String> filters, String sort, boolean desc, int page) {
+    public Page page(
+        String kind, Map<String, String> filters, String sort, boolean desc, int page) {
       return run(() -> super.page(kind, filters, sort, desc, page));
     }
 
@@ -129,11 +130,13 @@ class PostgresTest {
     }
 
     @Override
-    public void delete(String kind, int id, Integer replacement, long expectedVersion) {
-      run(() -> {
-        super.delete(kind, id, replacement, expectedVersion);
-        return null;
-      });
+    public int delete(String kind, int id, Integer replacement, long expectedVersion) {
+      return run(() -> super.delete(kind, id, replacement, expectedVersion));
+    }
+
+    @Override
+    public int countDependents(String kind, int id) {
+      return run(() -> super.countDependents(kind, id));
     }
 
     @Override
@@ -151,6 +154,18 @@ class PostgresTest {
 
   int coordinates() {
     return svc.save("Coordinates", null, 0, Map.of("x", "10", "y", "20"));
+  }
+
+  int location() {
+    return svc.save("Location", null, 0, Map.of("x", "1.5", "y", "2", "name", "Корпус"));
+  }
+
+  int person(int location) {
+    return svc.save(
+        "Person",
+        null,
+        0,
+        Map.of("name", "Автор", "location", "" + location, "nationality", "FRANCE"));
   }
 
   int discipline(String name) {
@@ -252,7 +267,7 @@ class PostgresTest {
   }
 
   @Test
-  void topTenPreservesSourceAndIsIdempotent() {
+  void topTenMovesHardestIntoProgramAndIsIdempotent() {
     int c = coordinates(), d = discipline("Target"), source = discipline("Source");
     for (int i = 0; i < 12; i++) {
       var data = lab("Work " + i, c);
@@ -268,16 +283,38 @@ class PostgresTest {
             .allMatch(
                 r ->
                     r.get("difficulty").equals("TERRIBLE")
-                        && r.get("discipline.id").equals("" + source)));
+                        && r.get("discipline.id").equals("" + d)));
+    // Лёгкие работы остались у исходной дисциплины.
+    assertEquals(2, svc.program(source).size());
   }
 
   @Test
-  void replacementIsRequiredAndAtomic() {
+  void replacementMovesReferencesInsteadOfDeleting() {
     int old = coordinates(), next = coordinates(), id = create("X", old);
-    assertThrows(IllegalArgumentException.class, () -> svc.delete("Coordinates", old, null, 0));
-    assertEquals(old, ((LabWork) svc.get("LabWork", id)).getCoordinates().getId());
-    svc.delete("Coordinates", old, next, 0);
+    assertEquals(0, svc.delete("Coordinates", old, next, 0));
     assertEquals(next, ((LabWork) svc.get("LabWork", id)).getCoordinates().getId());
+  }
+
+  @Test
+  void deletionWithoutReplacementRemovesDependents() {
+    int c = coordinates(), id = create("X", c);
+    assertEquals(1, svc.countDependents("Coordinates", c));
+    assertEquals(1, svc.delete("Coordinates", c, null, 0));
+    assertThrows(IllegalArgumentException.class, () -> svc.get("LabWork", id));
+    assertThrows(IllegalArgumentException.class, () -> svc.get("Coordinates", c));
+  }
+
+  @Test
+  void cascadeReachesIndirectDependents() {
+    int c = coordinates(), location = location(), author = person(location);
+    var data = lab("Authored", c);
+    data.put("author", "" + author);
+    int work = svc.save("LabWork", null, 0, data);
+    // Локация → автор → работа: удаление локации должно унести обе записи.
+    assertEquals(2, svc.countDependents("Location", location));
+    assertEquals(2, svc.delete("Location", location, null, 0));
+    assertThrows(IllegalArgumentException.class, () -> svc.get("Person", author));
+    assertThrows(IllegalArgumentException.class, () -> svc.get("LabWork", work));
   }
 
   @Test
@@ -291,7 +328,7 @@ class PostgresTest {
   void filtersAndPaginationKeepNullRelations() {
     int c = coordinates();
     for (int i = 0; i < 25; i++) create("Work " + i, c);
-    assertEquals(25, svc.page("LabWork", Map.of(), "author.name", false, 0).total());
+    assertEquals(25, svc.page("LabWork", Map.of(), "id", false, 0).total());
     assertEquals(5, svc.page("LabWork", Map.of(), "id", false, 1).rows().size());
     assertEquals(11, svc.page("LabWork", Map.of("name", "k 1"), "name", false, 0).total());
   }
@@ -315,13 +352,13 @@ class PostgresTest {
   }
 
   @Test
-  void disciplineReplacementMergesProgramsAndReferences() {
+  void disciplineReplacementMovesProgramToAnotherDiscipline() {
     int c = coordinates(), old = discipline("Old"), next = discipline("Next");
     var data = lab("Program work", c);
     data.put("discipline", "" + old);
     int work = svc.save("LabWork", null, 0, data);
     svc.special("top", "" + old, "");
-    svc.special("top", "" + next, "");
+    assertEquals(1, svc.program(old).size());
     svc.delete("Discipline", old, next, 0);
     assertEquals(next, ((LabWork) svc.get("LabWork", work)).getDiscipline().getId());
     assertEquals(1, svc.program(next).size());

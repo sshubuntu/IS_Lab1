@@ -17,9 +17,11 @@ public class AuthFilter implements Filter {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     String path = req.getRequestURI().substring(req.getContextPath().length());
+    // Рукопожатие websocket нельзя перенаправлять: Faces сам сверяет токен канала с сессией.
     if (path.equals("/login.xhtml")
         || path.equals("/register.xhtml")
-        || path.startsWith("/jakarta.faces.resource/")) {
+        || path.startsWith("/jakarta.faces.resource/")
+        || path.startsWith("/jakarta.faces.push/")) {
       chain.doFilter(request, response);
       return;
     }

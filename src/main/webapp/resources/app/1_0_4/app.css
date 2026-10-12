@@ -41,36 +41,21 @@ header {
 }
 
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 12px;
+  padding: 6px 10px;
+  margin-left: -10px;
+  border-radius: 10px;
+  transition: background .15s ease;
 }
 
-.logo {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+.brand:hover {
   background: rgba(255, 255, 255, .14);
-  border: 1px solid rgba(255, 255, 255, .25);
-  font-weight: 800;
-  letter-spacing: .5px;
 }
 
-.brand-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-}
-
-.brand-text strong {
+.brand strong {
   font-size: 18px;
-}
-
-.brand-text small {
-  color: #c4d6f5;
-  font-size: 12px;
 }
 
 header a {
@@ -146,21 +131,20 @@ footer {
   align-items: center;
 }
 
-.filters-tools .ui-selectonemenu,
 .kind-menu {
   min-width: 200px;
 }
 
-/* Buttons: rounded, modern */
+/* Кнопки: одна высота по всему интерфейсу.
+   Внутреннюю раскладку (позиция иконки, отступы подписи) оставляем PrimeFaces:
+   его components.css подключается после app.css, и перебивать её значит ломать метрики. */
 .ui-button {
+  min-height: 40px;
   border-radius: 10px;
   font-weight: 600;
+  white-space: nowrap;
   box-shadow: none !important;
   transition: transform .06s ease, box-shadow .15s ease, background .15s ease;
-}
-
-.ui-button:not(.ui-button-icon-only) {
-  padding: 9px 16px;
 }
 
 .ui-button:hover {
@@ -169,9 +153,31 @@ footer {
 }
 
 .ui-button-icon-only {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+/* Кнопки действий в плотных строках таблицы — компактнее, но строго квадратные. */
+.ui-datatable tbody td .ui-button.ui-button-icon-only {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border-radius: 10px;
+}
+
+/* Там, где кнопки идут подряд вне flex-контейнера, нужен зазор. */
+.ui-datatable tbody td .ui-button + .ui-button,
+.ui-dialog-content .ui-button + .ui-button,
+.ui-dialog-buttonpane .ui-button + .ui-button,
+.operation .ui-button + .ui-button {
+  margin-left: 8px;
+}
+
+.ui-dialog-content .ui-button {
+  margin-top: 4px;
 }
 
 .ui-button-secondary {
@@ -184,19 +190,11 @@ footer {
 
 .ui-button.wide {
   width: 100%;
+  min-height: 46px;
   margin: 14px 0 0;
-  padding: 12px;
 }
 
 /* Fields */
-.filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 14px;
-  margin: 6px 0 4px;
-}
-
-.filter label,
 .op-field label,
 .op-title {
   display: block;
@@ -208,7 +206,6 @@ footer {
   margin: 0 0 4px;
 }
 
-.filter input,
 .op-field input {
   width: 100%;
   border-radius: 10px;
@@ -238,6 +235,22 @@ footer {
   padding: 10px 12px;
   white-space: nowrap;
   border-bottom: 1px solid var(--line);
+}
+
+.column-header {
+  display: grid;
+  gap: 6px;
+  min-width: 150px;
+  text-align: left;
+}
+
+.column-header .column-filter {
+  width: 100%;
+  min-width: 120px;
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .ui-datatable tbody td {
@@ -295,10 +308,7 @@ footer {
 }
 
 .detail,
-.detail-grid {
-  display: grid;
-  grid-template-columns: minmax(140px, 1fr) 2fr;
-  gap: 8px 16px;
+.detail-stack {
   padding: 12px 14px 14px;
 }
 
@@ -307,13 +317,27 @@ footer {
   overflow: auto;
 }
 
-.detail-grid strong {
+.detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-param {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.detail-param strong {
+  min-width: 200px;
   font-size: 13px;
   color: var(--muted);
   font-weight: 600;
 }
 
-.detail-grid span {
+.detail-param span {
+  flex: 1;
   overflow-wrap: anywhere;
 }
 
@@ -414,6 +438,29 @@ footer {
 .operation {
   max-width: 720px;
   padding: 20px 22px;
+  margin: 0 0 16px;
+}
+
+.operation h2 {
+  margin: 0 0 6px;
+  color: var(--ink);
+  font-size: 19px;
+}
+
+.operation p {
+  color: var(--muted);
+}
+
+.operation-danger {
+  border-color: #fecaca;
+}
+
+.operation-result {
+  margin: 18px 0 10px;
+}
+
+.operation-output .table-scroll {
+  margin-bottom: 8px;
 }
 
 .operation .ui-selectonemenu {
@@ -435,11 +482,176 @@ h3 {
 }
 
 /* PrimeFaces alignment remaps */
-.edit-fields > span,
-.filters > span {
+.edit-fields > span {
   display: contents;
 }
 
 .ui-selectonemenu-label {
   border-radius: 10px;
+}
+
+/* Фильтры над таблицей */
+.filter-card,
+.lookup-card {
+  padding: 16px 18px;
+  margin: 0 0 16px;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.filter-grid input {
+  width: 100%;
+  border-radius: 10px;
+  font-weight: 400;
+}
+
+/* Сортировка по заголовку колонки */
+.sort-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted) !important;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.sort-link:hover {
+  color: var(--brand) !important;
+}
+
+.sort-link .pi {
+  font-size: 11px;
+  opacity: .75;
+}
+
+/* Карточка объекта, найденного по ID */
+.lookup-card .lookup {
+  margin-top: 10px;
+}
+
+.detail-card {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.detail-head h3 {
+  margin: 0;
+}
+
+.detail-actions {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Меню команд */
+.command-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin: 18px 0;
+}
+
+.command-card {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 18px 20px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform .08s ease, box-shadow .15s ease, border-color .15s ease;
+}
+
+.command-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand);
+}
+
+.command-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--brand-dark);
+}
+
+.command-text {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+
+.command-danger {
+  border-color: #fecaca;
+}
+
+.command-danger .command-title {
+  color: var(--danger);
+}
+
+.back-link {
+  display: inline-block;
+  margin: 4px 0 0;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.back-link:hover {
+  color: var(--brand);
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  background: #eef2f7;
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+.delete-warning {
+  display: block;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  line-height: 1.45;
+}
+
+/* Поля ввода и списки совпадают по высоте с кнопками рядом. */
+.ui-inputfield {
+  min-height: 40px;
+}
+
+.ui-selectonemenu {
+  height: 40px;
+  min-height: 40px;
+}
+
+.ui-selectonemenu .ui-selectonemenu-label {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Одиночное поле команды не должно прилипать к кнопке. */
+.operation .op-field {
+  margin-bottom: 16px;
 }

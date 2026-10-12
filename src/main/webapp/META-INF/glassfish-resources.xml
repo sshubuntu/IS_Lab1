@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE resources PUBLIC "-//GlassFish.org//DTD GlassFish Application Server 3.1 Resource Definitions//EN"
+"https://glassfish.org/dtds/glassfish-resources_1_5.dtd">
+<resources>
+  <jdbc-connection-pool
+      name="LabWorkPool"
+      datasource-classname="org.postgresql.ds.PGSimpleDataSource"
+      res-type="javax.sql.DataSource"
+      is-isolation-level-guaranteed="false">
+    <property name="serverName" value="${ENV=DB_HOST}"/>
+    <property name="portNumber" value="5432"/>
+    <property name="databaseName" value="${ENV=DB_NAME}"/>
+    <property name="user" value="${ENV=DB_USER}"/>
+    <property name="password" value="${ENV=DB_PASSWORD}"/>
+  </jdbc-connection-pool>
+  <jdbc-resource jndi-name="jdbc/labwork" pool-name="LabWorkPool"/>
+</resources>

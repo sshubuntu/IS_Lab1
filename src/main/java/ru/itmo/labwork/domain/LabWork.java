@@ -6,7 +6,8 @@ import jakarta.validation.constraints.*;
 @Entity
 @Table(name = "lab_work")
 public class LabWork extends RecordEntity {
-  @NotBlank
+  @NotBlank(message = "Название лабораторной работы не может быть пустым")
+  @Size(max = 1000000, message = "Название не должно превышать {max} символов")
   @Column(name = "name", nullable = false, length = 1000000)
   private String name;
 
@@ -18,7 +19,7 @@ public class LabWork extends RecordEntity {
     name = value;
   }
 
-  @NotNull
+  @NotNull(message = "Координаты обязательны для заполнения")
   @ManyToOne(fetch = FetchType.EAGER)
   @JoinColumn(name = "coordinates_id", nullable = false)
   private Coordinates coordinates;
@@ -33,7 +34,7 @@ public class LabWork extends RecordEntity {
 
   @org.hibernate.annotations.Generated(org.hibernate.annotations.GenerationTime.INSERT)
   @Column(name = "creation_date", nullable = false, insertable = false, updatable = false)
-  @NotNull
+  @NotNull(message = "Дата создания обязательна")
   private java.time.LocalDateTime creationDate = java.time.LocalDateTime.now();
 
   public java.time.LocalDateTime getCreationDate() {
@@ -44,7 +45,8 @@ public class LabWork extends RecordEntity {
     creationDate = value;
   }
 
-  @NotNull
+  @NotBlank(message = "Описание не может быть пустым")
+  @Size(max = 1000000, message = "Описание не должно превышать {max} символов")
   @Column(name = "description", nullable = false, length = 1000000)
   private String description;
 
@@ -56,7 +58,7 @@ public class LabWork extends RecordEntity {
     description = value;
   }
 
-  @NotNull
+  @NotNull(message = "Сложность обязательна для заполнения")
   @Enumerated(EnumType.STRING)
   @Column(name = "difficulty", nullable = false)
   private Difficulty difficulty;
@@ -81,7 +83,7 @@ public class LabWork extends RecordEntity {
     discipline = value;
   }
 
-  @Positive
+  @Positive(message = "Минимальный балл должен быть больше 0")
   @Column(name = "minimal_point", nullable = false)
   private int minimalPoint;
 
@@ -93,7 +95,7 @@ public class LabWork extends RecordEntity {
     minimalPoint = value;
   }
 
-  @Positive
+  @Positive(message = "Максимум личностных качеств должен быть больше 0")
   @Column(name = "personal_qualities_maximum", nullable = false)
   private long personalQualitiesMaximum;
 

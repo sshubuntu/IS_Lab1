@@ -23,6 +23,7 @@ public class Database {
         .dataSource(url, user, password)
         .baselineOnMigrate(true)
         .baselineVersion("0")
+        .validateOnMigrate(false)
         .load()
         .migrate();
   }

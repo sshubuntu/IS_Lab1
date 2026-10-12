@@ -1,0 +1,29 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:p="http://primefaces.org/ui"
+                template="/WEB-INF/template.xhtml">
+
+  <ui:define name="content">
+    <h:link outcome="/operations" value="← Все команды" styleClass="back-link"/>
+    <h1>Поиск по началу имени</h1>
+    <p>Возвращает лабораторные работы, имя которых начинается с указанной подстроки.</p>
+
+    <h:form id="op">
+      <p:messages id="opMessages"/>
+
+      <section class="operation card">
+        <div class="op-field">
+          <label for="prefix">Начало имени</label>
+          <p:inputText id="prefix" value="#{operations.prefix}" placeholder="Например, Lab">
+            <p:ajax event="keyup" delay="400" process="@this"
+                    listener="#{operations.previewByPrefix}" update="opMessages results"/>
+          </p:inputText>
+        </div>
+      </section>
+
+      <ui:include src="/WEB-INF/includes/op-results.xhtml"/>
+    </h:form>
+  </ui:define>
+
+</ui:composition>

@@ -6,7 +6,7 @@
       xmlns:p="http://primefaces.org/ui">
   <h:head>
     <title>Вход • LabWork</title>
-    <h:outputStylesheet name="app.css"/>
+    <h:outputStylesheet library="app" name="app.css"/>
   </h:head>
   <h:body>
     <main class="login">
@@ -18,10 +18,10 @@
         <p:messages/>
 
         <p:outputLabel for="user" value="Логин"/>
-        <p:inputText id="user" value="#{login.username}" required="true" requiredMessage="Введите логин"/>
+        <p:inputText id="user" value="#{login.username}" required="true" maxlength="100" requiredMessage="Введите логин"/>
 
         <p:outputLabel for="password" value="Пароль"/>
-        <p:password id="password" value="#{login.password}" required="true" requiredMessage="Введите пароль"/>
+        <p:password id="password" value="#{login.password}" required="true" maxlength="100" requiredMessage="Введите пароль"/>
 
 <p:commandButton value="Войти" action="#{login.submit}" ajax="false" styleClass="wide"/>
         <p class="hint">Нет аккаунта? <h:link outcome="/register" value="Зарегистрироваться"/></p>

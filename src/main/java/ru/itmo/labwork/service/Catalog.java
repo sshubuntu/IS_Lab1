@@ -15,12 +15,12 @@ public final class Catalog {
           Map.entry("description", "Описание"),
           Map.entry("creationDate", "Дата создания"),
           Map.entry("difficulty", "Сложность"),
-          Map.entry("minimalPoint", "Минимальный балл"),
-          Map.entry("personalQualitiesMaximum", "Максимум личных качеств"),
+          Map.entry("minimalPoint", "Мин. балл"),
+          Map.entry("personalQualitiesMaximum", "Максимум ЛК"),
           Map.entry("x", "X"),
           Map.entry("y", "Y"),
           Map.entry("lectureHours", "Лекционные часы"),
-          Map.entry("practiceHours", "Практические часы"),
+          Map.entry("practiceHours", "Часы практики"),
           Map.entry("selfStudyHours", "Самоподготовка, ч"),
           Map.entry("labsCount", "Кол-во лабораторных"),
           Map.entry("eyeColor", "Цвет глаз"),
@@ -38,7 +38,7 @@ public final class Catalog {
   public static String label(String path) {
     return Arrays.stream(path.split("\\."))
         .map(part -> FIELD_LABELS.getOrDefault(part, OBJECT_LABELS.getOrDefault(part, part)))
-        .collect(Collectors.joining(" · "));
+        .collect(Collectors.joining(" - "));
   }
 
   public static final Map<String, Class<? extends RecordEntity>> TYPES;
@@ -119,11 +119,26 @@ public final class Catalog {
   public static List<String> ownColumns(String key) {
     var result = new ArrayList<String>();
     result.add("id");
-    for (Field f : type(key).getDeclaredFields()) result.add(f.getName());
+    for (Field f : type(key).getDeclaredFields()) {
+      if (!RecordEntity.class.isAssignableFrom(f.getType())) result.add(f.getName());
+    }
     return result;
   }
 
+  public static List<String> ownStringColumns(String key) {
+    return ownColumns(key).stream().filter(column -> stringColumns(key).contains(column)).toList();
+  }
+
+  private static final java.time.format.DateTimeFormatter DISPLAY_DATE_TIME =
+      java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
+  private static final java.time.format.DateTimeFormatter DISPLAY_DATE =
+      java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+
   public static String text(Object value) {
-    return value == null ? "" : value.toString();
+    if (value == null) return "";
+    if (value instanceof java.time.LocalDateTime dateTime)
+      return dateTime.format(DISPLAY_DATE_TIME);
+    if (value instanceof java.time.LocalDate date) return date.format(DISPLAY_DATE);
+    return value.toString();
   }
 }

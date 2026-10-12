@@ -1,0 +1,40 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:p="http://primefaces.org/ui"
+                template="/WEB-INF/template.xhtml">
+
+  <ui:define name="content">
+    <h:link outcome="/operations" value="← Все команды" styleClass="back-link"/>
+    <h1>Понижение сложности</h1>
+    <p>Понижает сложность указанной работы на заданное число шагов; ниже уровня EASY не опускается.
+      Введите ID, чтобы увидеть текущую сложность.</p>
+
+    <h:form id="op">
+      <p:messages id="opMessages"/>
+
+      <section class="operation card">
+        <div class="op-fields">
+          <div class="op-field">
+            <label for="labId">ID лабораторной работы</label>
+            <p:inputText id="labId" value="#{operations.labId}" placeholder="Например, 1"
+                         converterMessage="ID работы должен быть целым числом" maxlength="10">
+              <p:ajax event="keyup" delay="400" process="@this"
+                      listener="#{operations.previewLab}" update="opMessages results"/>
+            </p:inputText>
+          </div>
+          <div class="op-field">
+            <label for="steps">Число шагов</label>
+            <p:inputText id="steps" value="#{operations.steps}" placeholder="Например, 1"
+                         converterMessage="Число шагов должно быть целым числом" maxlength="10"/>
+          </div>
+        </div>
+        <p:commandButton value="Понизить" icon="pi pi-arrow-down"
+                         action="#{operations.lowerDifficulty}" update="opMessages results"/>
+      </section>
+
+      <ui:include src="/WEB-INF/includes/op-results.xhtml"/>
+    </h:form>
+  </ui:define>
+
+</ui:composition>

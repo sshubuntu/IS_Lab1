@@ -35,10 +35,7 @@ public class Login implements Serializable {
     FacesContext.getCurrentInstance()
         .addMessage(
             null,
-            new FacesMessage(
-                FacesMessage.SEVERITY_ERROR,
-                "Неверный логин или пароль.",
-                null));
+            new FacesMessage(FacesMessage.SEVERITY_ERROR, "Неверный логин или пароль.", null));
     return null;
   }
 

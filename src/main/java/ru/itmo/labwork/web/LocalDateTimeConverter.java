@@ -18,7 +18,7 @@ public class LocalDateTimeConverter implements Converter<LocalDateTime> {
     try {
       return LocalDateTime.parse(value.trim(), FORMAT);
     } catch (RuntimeException e) {
-      throw new ConverterException("Неверный формат даты, ожидается «дд.ММ.гггг чч:мм»", e);
+      throw new ConverterException("Неверный формат даты. Введите дату в формате дд.ММ.гггг чч:мм", e);
     }
   }
 

@@ -1,0 +1,32 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:p="http://primefaces.org/ui"
+                template="/WEB-INF/template.xhtml">
+
+  <ui:define name="content">
+    <h:link outcome="/operations" value="← Все команды" styleClass="back-link"/>
+    <h1>Программа дисциплины</h1>
+    <p>Привязывает к указанной дисциплине десять самых сложных лабораторных работ.</p>
+
+    <h:form id="op">
+      <p:messages id="opMessages"/>
+
+      <section class="operation card">
+        <div class="op-field">
+          <label for="disciplineId">ID дисциплины</label>
+          <p:inputText id="disciplineId" value="#{operations.disciplineId}" placeholder="Например, 1"
+                       converterMessage="ID дисциплины должен быть целым числом" maxlength="10">
+            <p:ajax event="keyup" delay="400" process="@this"
+                    listener="#{operations.previewProgram}" update="opMessages results"/>
+          </p:inputText>
+        </div>
+        <p:commandButton value="Добавить 10 самых сложных" icon="pi pi-plus"
+                         action="#{operations.assignTopTen}" update="opMessages results"/>
+      </section>
+
+      <ui:include src="/WEB-INF/includes/op-results.xhtml"/>
+    </h:form>
+  </ui:define>
+
+</ui:composition>

@@ -22,7 +22,7 @@ public class LabService {
   @Transactional
   public Page page(String kind, Map<String, String> filters, String sort, boolean desc, int page) {
     Class<?> type = Catalog.type(kind);
-    List<String> allowed = Catalog.columns(kind);
+    List<String> allowed = Catalog.ownColumns(kind);
     if (!allowed.contains(sort)) throw new IllegalArgumentException("Недопустимая сортировка");
     String from = " from " + type.getSimpleName() + " e";
     // LEFT JOIN is required: optional author/discipline must not hide rows.
@@ -50,7 +50,7 @@ public class LabService {
     }
     StringBuilder where = new StringBuilder(" where 1=1");
     Map<String, Object> params = new HashMap<>();
-    for (String col : Catalog.stringColumns(kind)) {
+    for (String col : allowed) {
       String value = filters.get(col);
       if (value != null && !value.isEmpty()) {
         String param = "p" + params.size();
@@ -67,8 +67,7 @@ public class LabService {
     var count = em.createQuery("select count(e)" + base, Long.class);
     params.forEach(count::setParameter);
     long total = count.getSingleResult();
-    int last = (int) Math.max(0, (total - 1) / 20),
-        actual = Math.min(Math.max(0, page), last);
+    int last = (int) Math.max(0, (total - 1) / 20), actual = Math.min(Math.max(0, page), last);
     var query =
         em.createQuery(
             "select e"
@@ -116,30 +115,10 @@ public class LabService {
               : em.find(Catalog.type(kind), id, LockModeType.PESSIMISTIC_WRITE);
       if (e == null) throw new IllegalArgumentException("Объект уже удалён");
       if (id != null && e.getVersion() != version)
-        throw new IllegalArgumentException("Объект изменён другим пользователем. Откройте его заново.");
+        throw new IllegalArgumentException(
+            "Объект изменён другим пользователем. Откройте его заново.");
       for (Field field : Catalog.editable(kind)) {
-        String raw = values.get(field.getName());
-        Class<?> t = field.getType();
-        Object v;
-        try {
-          if (t == String.class) v = raw == null ? "" : raw;
-          else if (raw == null || raw.isBlank()) {
-            if (t.isPrimitive()) throw new IllegalArgumentException("обязательное число");
-            v = null;
-          } else if (t == int.class) v = Integer.valueOf(raw);
-          else if (t == long.class || t == Long.class) v = Long.valueOf(raw);
-          else if (t == Float.class) {
-            v = Float.valueOf(raw);
-            if (!Float.isFinite((Float) v)) throw new IllegalArgumentException("требуется конечное число");
-          } else if (t == LocalDateTime.class) v = LocalDateTime.parse(raw);
-          else if (t.isEnum()) v = Enum.valueOf((Class) t, raw);
-          else {
-            v = em.find(t, Integer.valueOf(raw));
-            if (v == null) throw new IllegalArgumentException("связанный объект не найден");
-          }
-        } catch (RuntimeException error) {
-          throw new IllegalArgumentException(field.getName() + ": " + error.getMessage());
-        }
+        Object v = parse(field, values.get(field.getName()));
         field.setAccessible(true);
         field.set(e, v);
       }
@@ -147,7 +126,7 @@ public class LabService {
       if (!errors.isEmpty())
         throw new IllegalArgumentException(
             errors.stream()
-                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                .map(jakarta.validation.ConstraintViolation::getMessage)
                 .sorted()
                 .reduce((a, b) -> a + "; " + b)
                 .orElse(""));
@@ -159,78 +138,198 @@ public class LabService {
     }
   }
 
+  /** Преобразует введённое пользователем значение в тип поля, поясняя ошибку по-русски. */
+  private Object parse(Field field, String raw) {
+    String label = Catalog.label(field.getName());
+    Class<?> t = field.getType();
+    if (t == String.class) return raw == null ? "" : raw;
+    if (raw == null || raw.isBlank()) {
+      if (t.isPrimitive()) throw new IllegalArgumentException(label + ": поле обязательно для заполнения");
+      return null;
+    }
+    String value = raw.trim();
+    if (t == int.class || t == Integer.class) return parseInteger(label, value);
+    if (t == long.class || t == Long.class) return parseLong(label, value);
+    if (t == Float.class) {
+      try {
+        Float f = Float.valueOf(value);
+        if (!Float.isFinite(f))
+          throw new IllegalArgumentException(
+              label + ": значение должно быть конечным числом (не NaN и не Infinity)");
+        return f;
+      } catch (NumberFormatException error) {
+        throw new IllegalArgumentException(label + ": значение должно быть числом");
+      }
+    }
+    if (t == LocalDateTime.class) {
+      try {
+        return LocalDateTime.parse(value);
+      } catch (java.time.format.DateTimeParseException error) {
+        throw new IllegalArgumentException(
+            label + ": неверный формат даты, ожидается дд.ММ.гггг чч:мм");
+      }
+    }
+    if (t.isEnum()) {
+      try {
+        return Enum.valueOf((Class) t, value);
+      } catch (IllegalArgumentException error) {
+        throw new IllegalArgumentException(label + ": выбрано недопустимое значение");
+      }
+    }
+    int refId;
+    try {
+      refId = Integer.parseInt(value);
+    } catch (NumberFormatException error) {
+      throw new IllegalArgumentException(label + ": идентификатор должен быть целым числом");
+    }
+    Object ref = em.find(t, refId);
+    if (ref == null) throw new IllegalArgumentException(label + ": связанная запись не найдена");
+    return ref;
+  }
+
+  private static int parseInteger(String label, String value) {
+    try {
+      return Integer.parseInt(value);
+    } catch (NumberFormatException error) {
+      if (value.matches("[+-]?\\d+"))
+        throw new IllegalArgumentException(
+            label + ": число слишком большое (допустимо от -2147483648 до 2147483647)");
+      throw new IllegalArgumentException(label + ": должно быть целым числом");
+    }
+  }
+
+  private static long parseLong(String label, String value) {
+    try {
+      return Long.parseLong(value);
+    } catch (NumberFormatException error) {
+      if (value.matches("[+-]?\\d+"))
+        throw new IllegalArgumentException(
+            label + ": число слишком большое (допустимо от -9223372036854775808 до 9223372036854775807)");
+      throw new IllegalArgumentException(label + ": должно быть целым числом");
+    }
+  }
+
+  /**
+   * Удаляет объект. Если выбрана замена, ссылающиеся записи переносятся на неё; если замена не
+   * выбрана, они удаляются каскадом вместе со своими зависимостями.
+   *
+   * @return число удалённых каскадом связанных записей
+   */
   @Transactional
-  public void delete(String kind, int id, Integer replacement, long expectedVersion) {
+  public int delete(String kind, int id, Integer replacement, long expectedVersion) {
     Class<? extends RecordEntity> type = Catalog.type(kind);
     var old = em.find(type, id, LockModeType.PESSIMISTIC_WRITE);
     if (old == null) throw new IllegalArgumentException("Объект уже удалён");
     if (old.getVersion() != expectedVersion)
       throw new IllegalArgumentException("Объект изменён; откройте удаление заново");
     if (replacement != null
-        && (replacement == id || em.find(type, replacement, LockModeType.PESSIMISTIC_WRITE) == null))
+        && (replacement == id
+            || em.find(type, replacement, LockModeType.PESSIMISTIC_WRITE) == null))
       throw new IllegalArgumentException("Выберите другой существующий объект");
-    for (var entry : Catalog.TYPES.entrySet())
-      for (Field field : Catalog.editable(entry.getKey())) {
-        if (field.getType() != type) continue;
-        String base = entry.getKey() + " e";
-        long count =
-            em.createQuery(
-                    "select count(e) from " + base + " where e." + field.getName() + ".id=:id",
-                    Long.class)
-                .setParameter("id", id)
-                .getSingleResult();
-        if (count > 0) {
-          if (replacement == null)
-            throw new IllegalArgumentException("Есть связанные объекты. Выберите замену.");
-          em.createQuery(
-                  "update "
-                      + base
-                      + " set e."
-                      + field.getName()
-                      + "=:next,e.version=e.version+1 where e."
-                      + field.getName()
-                      + ".id=:id")
-              .setParameter("next", em.getReference(type, replacement))
-              .setParameter("id", id)
-              .executeUpdate();
-        }
-      }
-    if (kind.equals("Discipline")) {
-      Number count =
-          (Number)
-              em.createNativeQuery(
-                      "select count(*) from discipline_program where discipline_id=:id")
-                  .setParameter("id", id)
-                  .getSingleResult();
-      if (count.longValue() > 0) {
-        if (replacement == null)
-          throw new IllegalArgumentException("В программе есть работы. Выберите замену дисциплины.");
-        em.createNativeQuery(
-                "insert into discipline_program select :next,lab_work_id from"
-                    + " discipline_program where discipline_id=:id on conflict do nothing")
-            .setParameter("next", replacement)
-            .setParameter("id", id)
-            .executeUpdate();
-        em.createNativeQuery("delete from discipline_program where discipline_id=:id")
-            .setParameter("id", id)
-            .executeUpdate();
-      }
-    }
+    int cascaded =
+        replacement == null ? cascade(kind, id, new HashSet<>()) : reassign(kind, id, replacement);
     em.remove(old);
     em.flush();
+    // Массовые операции идут мимо кэша контекста; не отдаём устаревшие связи.
+    em.clear();
+    return cascaded;
+  }
+
+  /** Переносит все ссылки на объект на другой объект того же типа. */
+  private int reassign(String kind, int id, int replacement) {
+    Class<? extends RecordEntity> type = Catalog.type(kind);
+    forEachReferencingField(
+        type,
+        (owner, field) ->
+            em.createQuery(
+                    "update "
+                        + owner
+                        + " e set e."
+                        + field.getName()
+                        + "=:next,e.version=e.version+1 where e."
+                        + field.getName()
+                        + ".id=:id")
+                .setParameter("next", em.getReference(type, replacement))
+                .setParameter("id", id)
+                .executeUpdate());
+    return 0;
+  }
+
+  /** Удаляет записи, ссылающиеся на объект, вместе с их собственными зависимостями. */
+  private int cascade(String kind, int id, Set<String> visited) {
+    Class<? extends RecordEntity> type = Catalog.type(kind);
+    int[] removed = {0};
+    forEachReferencingField(
+        type,
+        (owner, field) -> {
+          for (RecordEntity dependent : referencing(owner, field.getName(), id)) {
+            if (!visited.add(owner + "#" + dependent.getId())) continue;
+            removed[0] += 1 + cascade(owner, dependent.getId(), visited);
+            em.remove(dependent);
+            // Потомки должны исчезнуть раньше родителя, иначе сработает внешний ключ.
+            em.flush();
+          }
+          return 0;
+        });
+    return removed[0];
+  }
+
+  /** Сколько записей будет удалено каскадом вместе с объектом. */
+  @Transactional
+  public int countDependents(String kind, int id) {
+    return cascadeSize(kind, id, new HashSet<>());
+  }
+
+  private int cascadeSize(String kind, int id, Set<String> visited) {
+    int[] total = {0};
+    forEachReferencingField(
+        Catalog.type(kind),
+        (owner, field) -> {
+          for (RecordEntity dependent : referencing(owner, field.getName(), id))
+            if (visited.add(owner + "#" + dependent.getId()))
+              total[0] += 1 + cascadeSize(owner, dependent.getId(), visited);
+          return 0;
+        });
+    return total[0];
+  }
+
+  private List<RecordEntity> referencing(String owner, String field, int id) {
+    return em.createQuery("from " + owner + " e where e." + field + ".id=:id", RecordEntity.class)
+        .setParameter("id", id)
+        .getResultList();
+  }
+
+  /** Обходит все поля каталога, ссылающиеся на заданный тип. */
+  private void forEachReferencingField(
+      Class<? extends RecordEntity> type,
+      java.util.function.BiFunction<String, Field, Integer> action) {
+    for (var entry : Catalog.TYPES.entrySet())
+      for (Field field : Catalog.editable(entry.getKey()))
+        if (field.getType() == type) action.apply(entry.getKey(), field);
   }
 
   @Transactional
   public Object special(String operation, String arg, String extra) {
-    if (operation.equals("prefix"))
-      return em
-          .createNativeQuery(
-              "select * from find_labworks_by_name_prefix(cast(:arg as text))", LabWork.class)
-          .setParameter("arg", arg == null ? "" : arg)
-          .getResultList()
-          .stream()
-          .map(x -> row((RecordEntity) x))
-          .toList();
+    return switch (operation) {
+      case "prefix" -> findByNamePrefix(arg);
+      case "author", "point", "top" -> callSpecialFunction(operation, arg, null);
+      case "lower" -> callSpecialFunction(operation, arg, extra);
+      default -> throw new IllegalArgumentException("Неизвестная операция");
+    };
+  }
+
+  private List<Map<String, String>> findByNamePrefix(String prefix) {
+    return em
+        .createNativeQuery(
+            "select * from find_labworks_by_name_prefix(cast(:arg as text))", LabWork.class)
+        .setParameter("arg", prefix == null ? "" : prefix)
+        .getResultList()
+        .stream()
+        .map(x -> row((RecordEntity) x))
+        .toList();
+  }
+
+  private Object callSpecialFunction(String operation, String arg, String extra) {
     String function =
         switch (operation) {
           case "author" -> "delete_labworks_by_author";
@@ -240,29 +339,53 @@ public class LabService {
           default -> throw new IllegalArgumentException("Неизвестная операция");
         };
     Integer value = arg == null || arg.isBlank() ? null : Integer.valueOf(arg);
-    var q =
-        em.createNativeQuery(
-                "select "
-                    + function
-                    + "(cast(:arg as integer)"
-                    + (operation.equals("lower") ? ",cast(:steps as integer)" : "")
-                    + ")")
-            .setParameter("arg", value);
-    if (operation.equals("lower")) q.setParameter("steps", Integer.valueOf(extra));
-    return q.getSingleResult();
+    String sql =
+        "select "
+            + function
+            + "(cast(:arg as integer)"
+            + (operation.equals("lower") ? ",cast(:steps as integer)" : "")
+            + ")";
+    var query = em.createNativeQuery(sql).setParameter("arg", value);
+    if (operation.equals("lower")) query.setParameter("steps", Integer.valueOf(extra));
+    Object result = query.getSingleResult();
+    // Функция меняет строки напрямую, минуя кэш контекста; не отдаём устаревшие сущности.
+    em.flush();
+    em.clear();
+    return result;
   }
 
+  /** Работы указанного автора; null означает работы без автора. */
+  @Transactional
+  public List<Map<String, String>> byAuthor(Integer authorId) {
+    var query =
+        authorId == null
+            ? em.createQuery("from LabWork e where e.author is null order by e.id", LabWork.class)
+            : em.createQuery("from LabWork e where e.author.id=:id order by e.id", LabWork.class)
+                .setParameter("id", authorId);
+    return query.getResultList().stream().map(this::row).toList();
+  }
+
+  /** Работы с точно заданным минимальным баллом. */
+  @Transactional
+  public List<Map<String, String>> byMinimalPoint(int minimalPoint) {
+    return em
+        .createQuery("from LabWork e where e.minimalPoint=:point order by e.id", LabWork.class)
+        .setParameter("point", minimalPoint)
+        .getResultList()
+        .stream()
+        .map(this::row)
+        .toList();
+  }
+
+  /** Программа дисциплины — работы, привязанные к ней полем discipline. */
   @Transactional
   public List<Map<String, String>> program(int id) {
     return em
-        .createNativeQuery(
-            "select l.* from lab_work l join discipline_program p on p.lab_work_id=l.id"
-                + " where p.discipline_id=:id order by l.id",
-            LabWork.class)
+        .createQuery("from LabWork e where e.discipline.id=:id order by e.id", LabWork.class)
         .setParameter("id", id)
         .getResultList()
         .stream()
-        .map(x -> row((RecordEntity) x))
+        .map(this::row)
         .toList();
   }
 }

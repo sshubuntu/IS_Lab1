@@ -1,0 +1,23 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:p="http://primefaces.org/ui">
+
+  <p:outputPanel id="results" styleClass="operation-output">
+    <ui:fragment rendered="#{not empty operations.summary}">
+      <h3 class="operation-result"><h:outputText value="#{operations.summary}"/></h3>
+    </ui:fragment>
+
+    <ui:fragment rendered="#{not empty operations.results}">
+      <div class="table-scroll card">
+        <p:dataTable value="#{operations.results}" var="row"
+                     paginator="#{operations.paginated}" rows="10">
+          <p:columns value="#{operations.resultColumns}" var="column"
+                     headerText="#{operations.columnLabel(column)}">
+            <h:outputText value="#{row[column]}"/>
+          </p:columns>
+        </p:dataTable>
+      </div>
+    </ui:fragment>
+  </p:outputPanel>
+</ui:composition>

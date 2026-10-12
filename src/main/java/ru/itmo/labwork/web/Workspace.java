@@ -1,6 +1,5 @@
 package ru.itmo.labwork.web;
 
-import jakarta.faces.application.FacesMessage;
 import jakarta.faces.context.FacesContext;
 import jakarta.faces.view.ViewScoped;
 import jakarta.inject.*;
@@ -16,62 +15,29 @@ import ru.itmo.labwork.service.*;
 @ViewScoped
 public class Workspace implements Serializable {
   @Inject private LabService service;
-  private String kind = "LabWork",
-      sort = "id",
-      mode = "view",
-      param1 = "",
-      param2 = "0",
-      operation = "prefix";
+  @Inject private Changes changes;
+
+  private String kind = "LabWork", sort = "id", mode = "view";
   private boolean descending;
   private int page;
   private long total, version;
   private Integer selectedId, replacement, lookupId;
+  private int dependents;
   private Map<String, String> filters = new LinkedHashMap<>(),
       values = new LinkedHashMap<>(),
       detail = new LinkedHashMap<>();
   private Map<String, LocalDateTime> dateValues = new LinkedHashMap<>();
-  private List<Map<String, String>> rows = new ArrayList<>(), results = new ArrayList<>();
-  private String result = "";
+  // JSF/PrimeFaces может вернуть Number при создании и String при редактировании.
+  private Map<String, Object> numberValues = new LinkedHashMap<>();
+  private List<Map<String, String>> rows = new ArrayList<>();
 
   @jakarta.annotation.PostConstruct
   public void init() {
     refresh();
   }
 
-  private void safely(Runnable action) {
-    try {
-      action.run();
-    } catch (Exception e) {
-      FacesContext.getCurrentInstance().validationFailed();
-      message(FacesMessage.SEVERITY_ERROR, error(e));
-    }
-  }
-
-  private String error(Throwable e) {
-    for (Throwable t = e; t != null; t = t.getCause())
-      if (t instanceof IllegalArgumentException) return t.getMessage();
-    for (Throwable t = e; t != null; t = t.getCause())
-      if (t instanceof org.postgresql.util.PSQLException p) {
-        return switch (p.getSQLState()) {
-          case "23503" ->
-              "Связанный объект удалён или используется другими записями. Обновите форму и выберите"
-                  + " замену.";
-          case "23514", "23502", "22001", "22003" ->
-              "Значение нарушает ограничения поля. Проверьте обязательные поля, длину и диапазон"
-                  + " чисел.";
-          case "P0001" -> p.getServerErrorMessage().getMessage();
-          default -> "Не удалось выполнить операцию БД; повторите после обновления.";
-        };
-      }
-    return "Операция не выполнена. Обновите данные и проверьте ввод.";
-  }
-
-  private void message(FacesMessage.Severity severity, String text) {
-    FacesContext.getCurrentInstance().addMessage(null, new FacesMessage(severity, text, null));
-  }
-
   public void refresh() {
-    safely(
+    Messages.safely(
         () -> {
           var p = service.page(kind, filters, sort, descending, page);
           rows = p.rows();
@@ -82,6 +48,7 @@ public class Workspace implements Serializable {
               detail = service.row(service.get(kind, selectedId));
             } catch (IllegalArgumentException e) {
               detail = new LinkedHashMap<>();
+              selectedId = null;
             }
         });
   }
@@ -89,8 +56,10 @@ public class Workspace implements Serializable {
   public void changeKind() {
     page = 0;
     sort = "id";
+    descending = false;
     filters.clear();
     selectedId = null;
+    lookupId = null;
     detail.clear();
     refresh();
   }
@@ -98,6 +67,28 @@ public class Workspace implements Serializable {
   public void search() {
     page = 0;
     refresh();
+  }
+
+  /** Сортировка по колонке: повторный клик меняет направление. */
+  public void applySort() {
+    String column =
+        FacesContext.getCurrentInstance()
+            .getExternalContext()
+            .getRequestParameterMap()
+            .get("sortColumn");
+    if (column == null || !Catalog.ownColumns(kind).contains(column)) return;
+    if (column.equals(sort)) descending = !descending;
+    else {
+      sort = column;
+      descending = false;
+    }
+    page = 0;
+    refresh();
+  }
+
+  public String sortIcon(String column) {
+    if (!column.equals(sort)) return "pi pi-sort-alt";
+    return descending ? "pi pi-sort-amount-down" : "pi pi-sort-amount-up";
   }
 
   public void next() {
@@ -112,16 +103,21 @@ public class Workspace implements Serializable {
 
   public void create() {
     selectedId = null;
+    version = 0;
     values = new LinkedHashMap<>();
     dateValues.clear();
+    numberValues.clear();
     mode = "edit";
-    for (Field f : Catalog.editable(kind))
-      if (f.getType() == LocalDateTime.class) dateValues.put(f.getName(), null);
-      else values.put(f.getName(), f.getType().isPrimitive() ? "0" : "");
+    for (Field f : Catalog.editable(kind)) {
+      Class<?> t = f.getType();
+      if (t == LocalDateTime.class) dateValues.put(f.getName(), null);
+      else if (isNumber(t)) numberValues.put(f.getName(), defaultNumber(f));
+      else values.put(f.getName(), "");
+    }
   }
 
   public void open(String id) {
-    safely(
+    Messages.safely(
         () -> {
           var e = service.get(kind, Integer.parseInt(id));
           selectedId = e.getId();
@@ -132,7 +128,19 @@ public class Workspace implements Serializable {
   }
 
   public void lookup() {
-    if (lookupId != null) open(lookupId.toString());
+    if (lookupId == null) {
+      Messages.error("Укажите ID объекта");
+      detail.clear();
+      selectedId = null;
+      return;
+    }
+    open(lookupId.toString());
+  }
+
+  public void clearDetail() {
+    selectedId = null;
+    lookupId = null;
+    detail.clear();
   }
 
   public void editRow(String id) {
@@ -142,16 +150,17 @@ public class Workspace implements Serializable {
 
   public void edit() {
     if (selectedId == null) return;
-    safely(
+    Messages.safely(
         () -> {
           var e = service.get(kind, selectedId);
           version = e.getVersion();
           values = new LinkedHashMap<>();
           dateValues.clear();
+          numberValues.clear();
           for (Field f : Catalog.editable(kind)) {
             Object v = Catalog.read(e, f.getName());
-            if (f.getType() == LocalDateTime.class)
-              dateValues.put(f.getName(), (LocalDateTime) v);
+            if (f.getType() == LocalDateTime.class) dateValues.put(f.getName(), (LocalDateTime) v);
+            else if (isNumber(f.getType())) numberValues.put(f.getName(), (Number) v);
             else
               values.put(
                   f.getName(),
@@ -163,7 +172,10 @@ public class Workspace implements Serializable {
 
   public void prepareDelete() {
     replacement = null;
+    dependents = 0;
     mode = "delete";
+    if (selectedId != null)
+      Messages.safely(() -> dependents = service.countDependents(kind, selectedId));
   }
 
   public void prepareDeleteRow(String id) {
@@ -172,32 +184,77 @@ public class Workspace implements Serializable {
   }
 
   public void save() {
-    safely(
+    if (Messages.safely(
         () -> {
-          for (Field f : Catalog.editable(kind))
-            if (f.getType() == LocalDateTime.class)
+          for (Field f : Catalog.editable(kind)) {
+            Class<?> t = f.getType();
+            if (t == LocalDateTime.class)
               values.put(
                   f.getName(),
                   dateValues.get(f.getName()) == null
                       ? ""
                       : dateValues.get(f.getName()).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+            else if (isNumber(t))
+              values.put(f.getName(), numberToText(t, numberValues.get(f.getName())));
+          }
           selectedId = service.save(kind, selectedId, version, values);
           open(selectedId.toString());
           refresh();
-          message(FacesMessage.SEVERITY_INFO, "Объект сохранён");
-        });
+          Messages.info("Объект сохранён");
+        })) changes.fire();
   }
 
   public void delete() {
-    safely(
+    if (Messages.safely(
         () -> {
-          service.delete(kind, selectedId, replacement, version);
+          int cascaded = service.delete(kind, selectedId, replacement, version);
           selectedId = null;
+          lookupId = null;
           detail.clear();
+          dependents = 0;
           mode = "view";
           refresh();
-          message(FacesMessage.SEVERITY_INFO, "Объект удалён, ссылки перенесены");
-        });
+          Messages.info(
+              replacement != null
+                  ? "Объект удалён, ссылки перенесены"
+                  : cascaded == 0
+                      ? "Объект удалён"
+                      : "Объект удалён вместе со связанными записями: " + cascaded);
+        })) changes.fire();
+  }
+
+  /** Предел типа float4 (колонка real) в виде обычного десятичного числа. */
+  private static final String FLOAT_LIMIT = "340282350000000000000000000000000000000";
+
+  static boolean isNumber(Class<?> t) {
+    return t == int.class
+        || t == Integer.class
+        || t == long.class
+        || t == Long.class
+        || t == Float.class;
+  }
+
+  private static Number defaultNumber(Field field) {
+    Class<?> t = field.getType();
+    boolean positive = field.getAnnotation(jakarta.validation.constraints.Positive.class) != null;
+    if (positive) {
+      if (t == long.class || t == Long.class) return 1L;
+      if (t == Float.class) return 1f;
+      return 1;
+    }
+    if (t == int.class) return 0;
+    if (t == long.class) return 0L;
+    if (t == Float.class) return 0f;
+    return null;
+  }
+
+  private static String numberToText(Class<?> t, Object value) {
+    if (value == null) return "";
+    if (value instanceof String text) return text.trim();
+    Number number = (Number) value;
+    if (t == int.class || t == Integer.class) return String.valueOf(number.intValue());
+    if (t == long.class || t == Long.class) return String.valueOf(number.longValue());
+    return String.valueOf(number.floatValue());
   }
 
   public List<Input> getInputs() {
@@ -225,9 +282,40 @@ public class Workspace implements Serializable {
       return field.getType() == LocalDateTime.class;
     }
 
+    public boolean isNumber() {
+      return Workspace.isNumber(field.getType());
+    }
+
+    public boolean isRequired() {
+      return field.getType().isPrimitive()
+          || field.getAnnotation(jakarta.validation.constraints.NotNull.class) != null
+          || field.getAnnotation(jakarta.validation.constraints.NotBlank.class) != null;
+    }
+
+    /** Нижняя граница ввода: ограничение поля или минимум его типа. */
+    public String getMinValue() {
+      if (field.getAnnotation(jakarta.validation.constraints.Positive.class) != null) return "1";
+      Class<?> t = field.getType();
+      if (t == int.class || t == Integer.class) return "-2147483648";
+      if (t == long.class || t == Long.class) return "-9223372036854775808";
+      return "-" + FLOAT_LIMIT;
+    }
+
+    /** Верхняя граница ввода: максимум типа, дальше значение не поместится в колонку. */
+    public String getMaxValue() {
+      Class<?> t = field.getType();
+      if (t == int.class || t == Integer.class) return "2147483647";
+      if (t == long.class || t == Long.class) return "9223372036854775807";
+      return FLOAT_LIMIT;
+    }
+
+    public String getDecimalPlaces() {
+      return field.getType() == Float.class ? "4" : "0";
+    }
+
     public Map<String, String> getOptions() {
       Map<String, String> options = new LinkedHashMap<>();
-      options.put("— не задано —", "");
+      if (!isRequired()) options.put("— не задано —", "");
       if (field.getType().isEnum())
         for (Object v : field.getType().getEnumConstants()) options.put(v.toString(), v.toString());
       else if (isChoice())
@@ -254,36 +342,27 @@ public class Workspace implements Serializable {
                       : t == long.class || t == Long.class ? "Целое число (64 бита)" : "";
       if (field.getAnnotation(jakarta.validation.constraints.NotNull.class) != null
           || field.getAnnotation(jakarta.validation.constraints.NotBlank.class) != null)
-        hint += " • обязательно";
+        hint += " - обязательно для заполнения";
       if (field.getAnnotation(jakarta.validation.constraints.Positive.class) != null)
-        hint += " • больше 0";
-      if (field.getName().equals("name") && field.getDeclaringClass() == Location.class)
-        hint += " • до 291 символа";
+        hint += " - значение должно быть больше 0";
+      if (field.getType() == String.class) hint += " - не более " + getMaxlength() + " символов";
       return hint;
     }
-  }
 
-  public void runSpecial() {
-    safely(
-        () -> {
-          String a = param1, e = param2;
-          if (operation.equals("lower") && (e == null || e.isBlank())) e = "0";
-          Object r = service.special(operation, a, e);
-          results = new ArrayList<>();
-          if (r instanceof List<?> l) {
-            results = (List<Map<String, String>>) l;
-            result = "Найдено: " + l.size();
-          } else result = r == null ? "Совпадений нет" : "Результат: " + r;
-          refresh();
-        });
-  }
-
-  public void showProgram() {
-    safely(
-        () -> {
-          results = service.program(selectedId);
-          result = "Программа дисциплины: " + results.size() + " работ";
-        });
+    /** Сколько символов физически можно набрать: предел из @Size, колонки или диапазона типа. */
+    public int getMaxlength() {
+      Class<?> t = field.getType();
+      if (t == String.class) {
+        var size = field.getAnnotation(jakarta.validation.constraints.Size.class);
+        if (size != null && size.max() < Integer.MAX_VALUE) return size.max();
+        var column = field.getAnnotation(jakarta.persistence.Column.class);
+        return column != null && column.length() > 0 ? column.length() : 255;
+      }
+      if (t == int.class || t == Integer.class) return 11; // -2147483648
+      if (t == long.class || t == Long.class) return 20; // -9223372036854775808
+      if (t == Float.class) return 40;
+      return 255;
+    }
   }
 
   public List<String> getKinds() {
@@ -292,14 +371,6 @@ public class Workspace implements Serializable {
 
   public List<String> getColumns() {
     return Catalog.columns(kind);
-  }
-
-  public List<String> getStringColumns() {
-    return Catalog.stringColumns(kind);
-  }
-
-  public List<String> getResultColumns() {
-    return Catalog.columns("LabWork");
   }
 
   public List<RecordEntity> getReplacements() {
@@ -318,16 +389,8 @@ public class Workspace implements Serializable {
     return sort;
   }
 
-  public void setSort(String v) {
-    sort = v;
-  }
-
   public boolean isDescending() {
     return descending;
-  }
-
-  public void setDescending(boolean v) {
-    descending = v;
   }
 
   public Map<String, String> getFilters() {
@@ -346,20 +409,16 @@ public class Workspace implements Serializable {
     return detail;
   }
 
-  public List<Map<String, String>> getResults() {
-    return results;
-  }
-
-  public String getResult() {
-    return result;
-  }
-
   public String getMode() {
     return mode;
   }
 
   public Integer getSelectedId() {
     return selectedId;
+  }
+
+  public int getDependents() {
+    return dependents;
   }
 
   public Integer getReplacement() {
@@ -378,40 +437,12 @@ public class Workspace implements Serializable {
     lookupId = v;
   }
 
-  public String getArg() {
-    return param1;
-  }
-
-  public void setArg(String v) {
-    param1 = v;
-  }
-
-  public String getExtra() {
-    return param2;
-  }
-
-  public void setExtra(String v) {
-    param2 = v;
-  }
-
-  public String getParam1() {
-    return param1;
-  }
-
-  public void setParam1(String v) {
-    param1 = v;
-  }
-
-  public String getParam2() {
-    return param2;
-  }
-
-  public void setParam2(String v) {
-    param2 = v;
-  }
-
   public Map<String, LocalDateTime> getDateValues() {
     return dateValues;
+  }
+
+  public Map<String, Object> getNumberValues() {
+    return numberValues;
   }
 
   public List<String> getTopColumns() {
@@ -444,14 +475,6 @@ public class Workspace implements Serializable {
 
   public int subcolumnCount(String group) {
     return getSubcolumns().getOrDefault(group, List.of()).size();
-  }
-
-  public String getOperation() {
-    return operation;
-  }
-
-  public void setOperation(String v) {
-    operation = v;
   }
 
   public long getTotal() {

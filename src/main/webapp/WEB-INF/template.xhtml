@@ -7,18 +7,15 @@
   <h:head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>LabWork • Информационная система</title>
-    <h:outputStylesheet name="app.css"/>
+    <title>LabWork</title>
+    <h:outputStylesheet library="app" name="app.css"/>
+    <h:outputScript library="app" name="inputlimits.js" target="body"/>
   </h:head>
   <h:body>
     <header>
-      <div class="brand">
-        <span class="logo">LW</span>
-        <span class="brand-text">
-          <strong>LabWork</strong>
-          <small>Управление лабораторными работами</small>
-        </span>
-      </div>
+      <h:link outcome="/index" styleClass="brand" title="На главную страницу">
+        <strong>LabWork</strong>
+      </h:link>
       <h:form class="nav">
         <h:link outcome="/index" value="Объекты"/>
         <h:link outcome="/operations" value="Команды"/>
@@ -29,7 +26,5 @@
     <main>
       <ui:insert name="content"/>
     </main>
-
-    <footer>LabWork · Информационная система</footer>
   </h:body>
 </html>

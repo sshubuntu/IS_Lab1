@@ -42,8 +42,7 @@ public class UserStore {
                 .orElse(null);
     if (stored == null) return false;
     return MessageDigest.isEqual(
-        stored.getBytes(StandardCharsets.UTF_8),
-        sha256(password).getBytes(StandardCharsets.UTF_8));
+        stored.getBytes(StandardCharsets.UTF_8), sha256(password).getBytes(StandardCharsets.UTF_8));
   }
 
   public static String sha256(String value) {

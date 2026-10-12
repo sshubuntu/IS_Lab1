@@ -3,11 +3,19 @@
                 xmlns:f="jakarta.faces.core"
                 xmlns:ui="jakarta.faces.facelets"
                 xmlns:p="http://primefaces.org/ui"
+                xmlns:pt="jakarta.faces.passthrough"
                 template="/WEB-INF/template.xhtml">
 
   <ui:define name="content">
     <h1>Объекты</h1>
-    <p>Выберите раздел. Нажмите стрелку, чтобы развернуть все поля записи.</p>
+    <p>Выберите раздел. Нажмите заголовок колонки, чтобы отсортировать, и стрелку в строке,
+      чтобы развернуть связанные объекты. Список сам обновляется, когда данные меняет другой пользователь.</p>
+
+    <h:form id="sync">
+      <p:remoteCommand name="syncObjects" process="@this" action="#{workspace.refresh}"
+                       update=":list:table :list:pager :lookupForm:detail"/>
+    </h:form>
+    <f:websocket channel="labwork" onmessage="function() { syncObjects(); }"/>
 
     <h:form id="toolbar">
       <p:messages id="messages" showDetail="false"/>
@@ -15,7 +23,8 @@
       <div class="toolbar">
         <p:selectOneMenu value="#{workspace.kind}" styleClass="kind-menu">
           <f:selectItems value="#{workspace.kinds}"/>
-          <p:ajax listener="#{workspace.changeKind}" update=":toolbar :list :editForm :deleteForm"/>
+          <p:ajax listener="#{workspace.changeKind}"
+                  update=":toolbar :list :lookupForm :editForm :deleteForm"/>
         </p:selectOneMenu>
 
         <p:commandButton icon="pi pi-plus" title="Создать" ariaLabel="Создать"
@@ -23,37 +32,71 @@
                          oncomplete="PF('editor').show()"/>
 
         <span class="spacer"/>
-        <p:commandButton value="Команды" icon="pi pi-bolt" title="Команды"
-                         action="/operations?faces-redirect=true" styleClass="ui-button-secondary"/>
       </div>
+    </h:form>
 
-      <p:fieldset legend="Фильтры и сортировка" toggleable="true" collapsed="true">
-        <div class="filters">
-          <ui:repeat value="#{workspace.stringColumns}" var="column">
-            <div class="filter">
-              <label><h:outputText value="#{workspace.columnLabel(column)}"/></label>
-              <p:inputText value="#{workspace.filters[column]}" placeholder="Содержит…"/>
+    <h:form id="lookupForm">
+      <div class="card lookup-card">
+        <span class="op-title">Информация об объекте по ID</span>
+        <div class="lookup">
+          <p:inputText value="#{workspace.lookupId}" placeholder="ID объекта" maxlength="10"
+                       converterMessage="ID должен быть целым числом"/>
+          <p:commandButton value="Показать" icon="pi pi-search" action="#{workspace.lookup}"
+                           update="@form :toolbar:messages"/>
+        </div>
+
+        <p:outputPanel id="detail">
+          <ui:fragment rendered="#{not empty workspace.detail}">
+            <div class="detail-card">
+              <div class="detail-head">
+                <h3>#{workspace.kind} ##{workspace.selectedId}</h3>
+                <span class="detail-actions">
+                  <p:commandButton value="Изменить" icon="pi pi-pencil" process="@this"
+                                   action="#{workspace.edit}" update=":editForm :toolbar:messages"
+                                   oncomplete="PF('editor').show()"/>
+                  <p:commandButton value="Удалить" icon="pi pi-trash" process="@this"
+                                   action="#{workspace.prepareDelete}"
+                                   update=":deleteForm :toolbar:messages"
+                                   oncomplete="PF('removal').show()" styleClass="ui-button-danger"/>
+                  <p:commandButton value="Скрыть" icon="pi pi-times" process="@this"
+                                   action="#{workspace.clearDetail}" update="@form"
+                                   styleClass="ui-button-secondary"/>
+                </span>
+              </div>
+              <div class="detail-stack">
+                <ui:repeat value="#{workspace.columns}" var="column">
+                  <div class="detail-param">
+                    <strong><h:outputText value="#{workspace.columnLabel(column)}"/></strong>
+                    <span><h:outputText value="#{workspace.detail[column]}"/></span>
+                  </div>
+                </ui:repeat>
+              </div>
             </div>
-          </ui:repeat>
-        </div>
-
-        <div class="toolbar filters-tools">
-          <p:selectOneMenu value="#{workspace.sort}">
-            <f:selectItems value="#{workspace.columns}" var="c" itemValue="#{c}"
-                           itemLabel="#{workspace.columnLabel(c)}"/>
-          </p:selectOneMenu>
-          <p:selectBooleanCheckbox value="#{workspace.descending}" itemLabel="По убыванию"/>
-          <p:commandButton value="Применить" icon="pi pi-filter" action="#{workspace.search}"
-                           update=":list messages"/>
-        </div>
-      </p:fieldset>
+          </ui:fragment>
+        </p:outputPanel>
+      </div>
     </h:form>
 
     <h:form id="list">
+      <div class="card filter-card">
+        <span class="op-title">Фильтры</span>
+        <div class="filter-grid">
+          <ui:repeat value="#{workspace.topColumns}" var="column">
+            <div class="op-field">
+              <label><h:outputText value="#{workspace.columnLabel(column)}"/></label>
+              <p:inputText value="#{workspace.filters[column]}" placeholder="Фильтр…">
+                <p:ajax event="keyup" delay="400" process="@this"
+                        listener="#{workspace.search}" update=":list:table :list:pager"/>
+              </p:inputText>
+            </div>
+          </ui:repeat>
+        </div>
+      </div>
+
       <div class="table-scroll card">
         <p:dataTable id="table" value="#{workspace.rows}" var="row" rowKey="#{row['id']}"
                      emptyMessage="Объекты не найдены" stripedRows="true">
-          <p:column style="width:40px">
+          <p:column style="width:40px" rendered="#{workspace.kind eq 'LabWork'}">
             <p:rowToggler expanderIcon="pi pi-fw pi-chevron-right"
                           collapserIcon="pi pi-fw pi-chevron-down" title="Развернуть"/>
           </p:column>
@@ -69,10 +112,19 @@
           </p:column>
           <p:columns value="#{workspace.topColumns}" var="column"
                      headerText="#{workspace.columnLabel(column)}">
+            <f:facet name="header">
+              <p:commandLink styleClass="sort-link" process="@this" update=":list:table :list:pager"
+                             action="#{workspace.applySort}"
+                             title="Сортировать по колонке">
+                <h:outputText value="#{workspace.columnLabel(column)}"/>
+                <h:outputText styleClass="#{workspace.sortIcon(column)}"/>
+                <f:param name="sortColumn" value="#{column}"/>
+              </p:commandLink>
+            </f:facet>
             <h:outputText value="#{row[column]}"/>
           </p:columns>
 
-          <p:rowExpansion>
+          <p:rowExpansion rendered="#{workspace.kind eq 'LabWork'}">
             <div class="expand-details">
               <ui:repeat value="#{workspace.subgroups}" var="group">
                 <div class="expand-group">
@@ -80,10 +132,12 @@
                     <h:outputText value="#{workspace.columnLabel(group)}"/>
                     <span class="count">#{workspace.subcolumnCount(group)}</span>
                   </div>
-                  <div class="detail-grid">
+                  <div class="detail-stack">
                     <ui:repeat value="#{workspace.subcolumns[group]}" var="sub">
-                      <strong><h:outputText value="#{workspace.columnLabel(sub)}"/></strong>
-                      <span><h:outputText value="#{row[sub]}"/></span>
+                      <div class="detail-param">
+                        <strong><h:outputText value="#{workspace.columnLabel(sub)}"/></strong>
+                        <span><h:outputText value="#{row[sub]}"/></span>
+                      </div>
                     </ui:repeat>
                   </div>
                 </div>
@@ -97,7 +151,7 @@
         <p:commandButton icon="pi pi-chevron-left" title="Назад" ariaLabel="Назад"
                          value="Назад" action="#{workspace.previous}" disabled="#{workspace.first}"
                          process="@this" update="table pager"/>
-        <h:outputText value="Страница #{workspace.pageNumber} • Всего: #{workspace.total}"/>
+        <h:outputText value="Страница #{workspace.pageNumber} |  Всего: #{workspace.total}"/>
         <p:commandButton value="Далее" icon="pi pi-chevron-right" iconPos="right"
                          title="Далее" ariaLabel="Далее" action="#{workspace.next}"
                          disabled="#{workspace.last}" process="@this" update="table pager"/>
@@ -113,20 +167,33 @@
           <ui:repeat value="#{workspace.inputs}" var="field">
             <div>
               <h:outputText value="#{workspace.columnLabel(field.name)}"/>
-              <p:selectOneMenu value="#{workspace.values[field.name]}" rendered="#{field.choice}">
+              <p:selectOneMenu value="#{workspace.values[field.name]}" required="#{field.required}"
+                               requiredMessage="#{workspace.columnLabel(field.name)}: выберите значение"
+                               rendered="#{field.choice}">
                 <f:selectItems value="#{field.options}"/>
               </p:selectOneMenu>
               <p:calendar value="#{workspace.dateValues[field.name]}" rendered="#{field.date}"
                           converter="localDateTime" pattern="dd.MM.yyyy HH:mm"
                           showButtonPanel="true" navigator="true"/>
+              <p:inputNumber value="#{workspace.numberValues[field.name]}"
+                             minValue="#{field.minValue}" maxValue="#{field.maxValue}"
+                             decimalPlaces="#{field.decimalPlaces}" symbol=""
+                             thousandSeparator="" required="#{field.required}"
+                             requiredMessage="#{workspace.columnLabel(field.name)}: поле обязательно для заполнения"
+                             rendered="#{field.number}"/>
               <p:inputText value="#{workspace.values[field.name]}"
-                           rendered="#{not field.choice and not field.date}"/>
+                            maxlength="#{field.maxlength}"
+                            pt:maxlength="#{field.maxlength}"
+                            required="#{field.required}"
+                            requiredMessage="#{workspace.columnLabel(field.name)}: поле обязательно для заполнения"
+                            rendered="#{not field.choice and not field.date and not field.number}"/>
               <small><h:outputText value="#{field.hint}"/></small>
             </div>
           </ui:repeat>
         </div>
 
-        <p:commandButton value="Сохранить" action="#{workspace.save}" update="@form :list"
+        <p:commandButton value="Сохранить" action="#{workspace.save}"
+                         update="@form :list:table :list:pager :lookupForm:detail"
                          oncomplete="if (!args.validationFailed &amp;&amp; document.querySelector('#editForm .ui-messages-error') === null) PF('editor').hide()"/>
         <p:commandButton value="Отмена" type="button" onclick="PF('editor').hide()"
                          styleClass="ui-button-secondary"/>
@@ -136,16 +203,24 @@
     <p:dialog header="Удаление объекта" widgetVar="removal" width="600" modal="true" responsive="true">
       <h:form id="deleteForm">
         <p:messages/>
-        <p>Будет удалён объект #<h:outputText value="#{workspace.selectedId}"/>. Если на него ссылаются
-          другие записи, выберите замену: все ссылки будут перенесены.</p>
+        <p>Будет удалён объект #<h:outputText value="#{workspace.selectedId}"/>.</p>
+
+        <ui:fragment rendered="#{workspace.dependents gt 0}">
+          <p:outputPanel styleClass="delete-warning">
+            На объект ссылаются другие записи. Выберите замену — все ссылки перейдут на неё.
+            Без замены вместе с объектом будет удалено записей:
+            <strong><h:outputText value="#{workspace.dependents}"/></strong>.
+          </p:outputPanel>
+        </ui:fragment>
 
         <p:selectOneMenu value="#{workspace.replacement}">
-          <f:selectItem itemLabel="Без замены (если нет ссылок)" itemValue="#{null}" noSelectionOption="true"/>
+          <f:selectItem itemLabel="Без замены — удалить связанные записи" itemValue="#{null}" noSelectionOption="true"/>
           <f:selectItems value="#{workspace.replacements}" var="replacement"
                          itemLabel="#{replacement}" itemValue="#{replacement.id}"/>
         </p:selectOneMenu>
 
-        <p:commandButton value="Удалить" action="#{workspace.delete}" update="@form :list"
+        <p:commandButton value="Удалить" action="#{workspace.delete}"
+                         update="@form :list:table :list:pager :lookupForm:detail"
                          oncomplete="if (document.querySelector('#deleteForm .ui-messages-error') === null) PF('removal').hide()"
                          styleClass="ui-button-danger"/>
       </h:form>

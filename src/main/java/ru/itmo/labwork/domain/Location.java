@@ -6,12 +6,12 @@ import jakarta.validation.constraints.*;
 @Entity
 @Table(name = "location")
 public class Location extends RecordEntity {
-  @AssertTrue(message = "x должно быть конечным числом")
+  @AssertTrue(message = "Значение x должно быть конечным числом (не NaN, не Infinity)")
   public boolean isFinite() {
     return x == null || Float.isFinite(x);
   }
 
-  @NotNull
+  @NotNull(message = "Поле x обязательно для заполнения")
   @Column(name = "x", nullable = false)
   private Float x;
 
@@ -23,7 +23,7 @@ public class Location extends RecordEntity {
     x = value;
   }
 
-  @NotNull
+  @NotNull(message = "Поле y обязательно для заполнения")
   @Column(name = "y", nullable = false)
   private Long y;
 
@@ -35,7 +35,7 @@ public class Location extends RecordEntity {
     y = value;
   }
 
-  @Size(max = 291)
+  @Size(max = 291, message = "Название не должно превышать {max} символов")
   @Column(name = "name", nullable = true, length = 291)
   private String name;
 

@@ -1,0 +1,45 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:p="http://primefaces.org/ui"
+                template="/WEB-INF/template.xhtml">
+
+  <ui:define name="content">
+    <h:link outcome="/operations" value="← Все команды" styleClass="back-link"/>
+    <h1>Удаление работ автора</h1>
+    <p>Удаляет все лабораторные работы, значение поля author которых равно заданному.
+      Пустое поле означает работы без автора. Введите ID, чтобы заранее увидеть,
+      что будет удалено.</p>
+
+    <h:form id="op">
+      <p:messages id="opMessages"/>
+
+      <section class="operation card operation-danger">
+        <div class="op-field">
+          <label for="authorId">ID автора</label>
+          <p:inputText id="authorId" value="#{operations.authorId}"
+                       placeholder="Пусто — работы без автора"
+                       converterMessage="ID автора должен быть целым числом" maxlength="10">
+            <p:ajax event="keyup" delay="400" process="@this"
+                    listener="#{operations.previewByAuthor}" update="opMessages results"/>
+          </p:inputText>
+        </div>
+        <p:commandButton value="Удалить работы" icon="pi pi-trash"
+                         action="#{operations.deleteByAuthor}" update="opMessages results"
+                         styleClass="ui-button-danger">
+          <p:confirm header="Подтверждение удаления"
+                     message="Удалить все лабораторные работы этого автора? Это действие необратимо."
+                     icon="pi pi-exclamation-triangle"/>
+        </p:commandButton>
+      </section>
+
+      <ui:include src="/WEB-INF/includes/op-results.xhtml"/>
+
+      <p:confirmDialog global="true">
+        <p:commandButton value="Да" type="button" styleClass="ui-confirmdialog-yes"/>
+        <p:commandButton value="Отмена" type="button" styleClass="ui-confirmdialog-no ui-button-secondary"/>
+      </p:confirmDialog>
+    </h:form>
+  </ui:define>
+
+</ui:composition>
